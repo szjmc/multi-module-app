@@ -9,16 +9,6 @@ require('dotenv').config();
 // 数据库名称
 const dbName = process.env.DB_NAME || 'todo_app';
 
-// 数据库连接配置
-const poolConfig = {
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'postgres',
-  port: process.env.DB_PORT || 5432,
-  max: 10, // 连接池中的最大连接数
-  idleTimeoutMillis: 30000, // 空闲连接超时时间
-  connectionTimeoutMillis: 2000, // 连接超时时间
-};
-
 // 初始化pool变量
 let pool;
 
@@ -29,46 +19,18 @@ async function testConnection() {
     const dbPassword = process.env.DB_PASSWORD;
     const isPasswordSet = dbPassword && typeof dbPassword === 'string' && dbPassword.trim() !== '';
     
-    // 创建临时连接池配置，只在密码存在时添加密码
-    const tempPoolConfig = {
-      host: process.env.DB_HOST || 'localhost',
-      user: process.env.DB_USER || 'postgres',
-      port: process.env.DB_PORT || 5432,
-      database: 'postgres' // 连接到默认的postgres数据库
-    };
-    
-    // 只有当密码存在且不为空字符串时才添加密码配置
-    if (isPasswordSet) {
-      tempPoolConfig.password = dbPassword;
-    }
-    
-    // 先创建一个不指定数据库的连接，用于创建数据库
-    const tempPool = new Pool(tempPoolConfig);
-    
-    const client = await tempPool.connect();
-    console.log('基础数据库连接成功');
-    
-    // 创建数据库（如果不存在）
-    await client.query(`SELECT 1 FROM pg_database WHERE datname = $1`, [dbName]);
-    const dbExists = (await client.query(`SELECT 1 FROM pg_database WHERE datname = $1`, [dbName])).rows.length > 0;
-    
-    if (!dbExists) {
-      await client.query(`CREATE DATABASE ${dbName}`);
-      console.log(`数据库 ${dbName} 创建成功`);
-    } else {
-      console.log(`数据库 ${dbName} 已存在`);
-    }
-    
-    // 释放连接并关闭临时连接池
-    client.release();
-    await tempPool.end();
-    
-    // 创建带数据库的连接池配置
+    // 创建连接池配置
     const mainPoolConfig = {
       host: process.env.DB_HOST || 'localhost',
       user: process.env.DB_USER || 'postgres',
       port: process.env.DB_PORT || 5432,
-      database: dbName
+      database: dbName,
+      max: 10, // 连接池中的最大连接数
+      idleTimeoutMillis: 30000, // 空闲连接超时时间
+      connectionTimeoutMillis: 2000, // 连接超时时间
+      ssl: {
+        rejectUnauthorized: false // 允许自签名证书，Supabase需要
+      }
     };
     
     // 只有当密码存在且不为空字符串时才添加密码配置
@@ -76,21 +38,21 @@ async function testConnection() {
       mainPoolConfig.password = dbPassword;
     }
     
-    // 创建带数据库的连接池
+    // 创建连接池
     pool = new Pool(mainPoolConfig);
     
-    // 测试带数据库的连接
+    // 测试连接
     const testClient = await pool.connect();
     await testClient.query('SELECT NOW()');
     testClient.release();
     
-    console.log('带数据库的连接池创建成功');
+    console.log('数据库连接池创建成功');
     
     return pool;
   } catch (err) {
-    console.error('数据库连接或创建失败:', err.message);
+    console.error('数据库连接失败:', err.message);
     console.error('错误堆栈:', err.stack);
-    process.exit(1);
+    throw err;
   }
 }
 

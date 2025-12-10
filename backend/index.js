@@ -11,7 +11,13 @@ require('dotenv').config();
 const app = express();
 
 // 中间件
-app.use(cors());
+const corsOptions = {
+  origin: ['https://multi-module-5mcw5agfc-sans-projects-97fe81a5.vercel.app', 'http://localhost:3000', 'http://localhost:5173'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+app.use(cors(corsOptions));
 // 增加请求体大小限制，支持更大的笔记内容
 app.use(express.json({ limit: '100mb' }));
 
@@ -29,6 +35,25 @@ async function initializeDatabase() {
     }
   }
 }
+
+// 根路径路由，返回API状态信息
+app.get('/', async (req, res) => {
+  try {
+    await initializeDatabase();
+    res.json({
+      status: 'ok',
+      message: 'FlowSync API服务正在运行',
+      version: '1.0.0',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      message: 'API服务初始化失败',
+      error: error.message
+    });
+  }
+});
 
 /**
  * 任务API路由
