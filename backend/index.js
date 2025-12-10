@@ -9,12 +9,26 @@ const { testConnection, initDatabase, query, insert, update, del } = require('./
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
 
 // 中间件
 app.use(cors());
 // 增加请求体大小限制，支持更大的笔记内容
 app.use(express.json({ limit: '100mb' }));
+
+// 初始化数据库连接和表
+let isDatabaseInitialized = false;
+async function initializeDatabase() {
+  if (!isDatabaseInitialized) {
+    try {
+      await testConnection();
+      await initDatabase();
+      isDatabaseInitialized = true;
+    } catch (error) {
+      console.error('数据库初始化失败:', error.message);
+      throw error;
+    }
+  }
+}
 
 /**
  * 任务API路由
@@ -23,6 +37,7 @@ app.use(express.json({ limit: '100mb' }));
 // 获取所有任务
 app.get('/api/tasks', async (req, res) => {
   try {
+    await initializeDatabase();
     const rows = await query('SELECT * FROM tasks ORDER BY created_at DESC');
     res.json(rows);
   } catch (error) {
@@ -33,6 +48,7 @@ app.get('/api/tasks', async (req, res) => {
 // 获取单个任务
 app.get('/api/tasks/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const rows = await query('SELECT * FROM tasks WHERE id = ?', [req.params.id]);
     if (rows.length === 0) {
       return res.status(404).json({ error: '任务不存在' });
@@ -46,6 +62,7 @@ app.get('/api/tasks/:id', async (req, res) => {
 // 创建任务
 app.post('/api/tasks', async (req, res) => {
   try {
+    await initializeDatabase();
     const { title, description, status = 'pending', priority = 'medium', due_date } = req.body;
     const result = await insert(
       'INSERT INTO tasks (title, description, status, priority, due_date) VALUES (?, ?, ?, ?, ?)',
@@ -60,6 +77,7 @@ app.post('/api/tasks', async (req, res) => {
 // 更新任务
 app.put('/api/tasks/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const { title, description, status, priority, due_date } = req.body;
     const result = await update(
       'UPDATE tasks SET title = ?, description = ?, status = ?, priority = ?, due_date = ? WHERE id = ?',
@@ -77,6 +95,7 @@ app.put('/api/tasks/:id', async (req, res) => {
 // 删除任务
 app.delete('/api/tasks/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const result = await del('DELETE FROM tasks WHERE id = ?', [req.params.id]);
     if (result.changes === 0) {
       return res.status(404).json({ error: '任务不存在' });
@@ -90,6 +109,7 @@ app.delete('/api/tasks/:id', async (req, res) => {
 // 更新任务状态
 app.patch('/api/tasks/:id/status', async (req, res) => {
   try {
+    await initializeDatabase();
     const { status } = req.body;
     const result = await update('UPDATE tasks SET status = ? WHERE id = ?', [status, req.params.id]);
     if (result.changes === 0) {
@@ -108,6 +128,7 @@ app.patch('/api/tasks/:id/status', async (req, res) => {
 // 获取所有事件
 app.get('/api/events', async (req, res) => {
   try {
+    await initializeDatabase();
     const rows = await query('SELECT * FROM events ORDER BY start_time ASC');
     res.json(rows);
   } catch (error) {
@@ -118,6 +139,7 @@ app.get('/api/events', async (req, res) => {
 // 获取单个事件
 app.get('/api/events/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const rows = await query('SELECT * FROM events WHERE id = ?', [req.params.id]);
     if (rows.length === 0) {
       return res.status(404).json({ error: '事件不存在' });
@@ -131,6 +153,7 @@ app.get('/api/events/:id', async (req, res) => {
 // 创建事件
 app.post('/api/events', async (req, res) => {
   try {
+    await initializeDatabase();
     const { title, description, start_time, end_time, location, color } = req.body;
     const result = await insert(
       'INSERT INTO events (title, description, start_time, end_time, location, color) VALUES (?, ?, ?, ?, ?, ?)',
@@ -145,6 +168,7 @@ app.post('/api/events', async (req, res) => {
 // 更新事件
 app.put('/api/events/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const { title, description, start_time, end_time, location, color } = req.body;
     const result = await update(
       'UPDATE events SET title = ?, description = ?, start_time = ?, end_time = ?, location = ?, color = ? WHERE id = ?',
@@ -162,6 +186,7 @@ app.put('/api/events/:id', async (req, res) => {
 // 删除事件
 app.delete('/api/events/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const result = await del('DELETE FROM events WHERE id = ?', [req.params.id]);
     if (result.changes === 0) {
       return res.status(404).json({ error: '事件不存在' });
@@ -179,6 +204,7 @@ app.delete('/api/events/:id', async (req, res) => {
 // 获取所有番茄钟记录
 app.get('/api/pomodoros', async (req, res) => {
   try {
+    await initializeDatabase();
     const rows = await query('SELECT * FROM pomodoros ORDER BY created_at DESC');
     res.json(rows);
   } catch (error) {
@@ -189,6 +215,7 @@ app.get('/api/pomodoros', async (req, res) => {
 // 创建番茄钟记录
 app.post('/api/pomodoros', async (req, res) => {
   try {
+    await initializeDatabase();
     const { duration = 25, completed = 0, start_time, end_time } = req.body;
     const result = await insert(
       'INSERT INTO pomodoros (duration, completed, start_time, end_time) VALUES (?, ?, ?, ?)',
@@ -203,6 +230,7 @@ app.post('/api/pomodoros', async (req, res) => {
 // 更新番茄钟记录
 app.put('/api/pomodoros/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const { duration, completed, start_time, end_time } = req.body;
     const result = await update(
       'UPDATE pomodoros SET duration = ?, completed = ?, start_time = ?, end_time = ? WHERE id = ?',
@@ -220,6 +248,7 @@ app.put('/api/pomodoros/:id', async (req, res) => {
 // 删除番茄钟记录
 app.delete('/api/pomodoros/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const result = await del('DELETE FROM pomodoros WHERE id = ?', [req.params.id]);
     if (result.changes === 0) {
       return res.status(404).json({ error: '番茄钟记录不存在' });
@@ -237,6 +266,7 @@ app.delete('/api/pomodoros/:id', async (req, res) => {
 // 获取所有时间追踪记录
 app.get('/api/time-trackings', async (req, res) => {
   try {
+    await initializeDatabase();
     const rows = await query('SELECT * FROM time_trackings ORDER BY start_time DESC');
     res.json(rows);
   } catch (error) {
@@ -247,6 +277,7 @@ app.get('/api/time-trackings', async (req, res) => {
 // 创建时间追踪记录
 app.post('/api/time-trackings', async (req, res) => {
   try {
+    await initializeDatabase();
     const { task_id, description, start_time } = req.body;
     const result = await insert(
       'INSERT INTO time_trackings (task_id, description, start_time) VALUES (?, ?, ?)',
@@ -261,6 +292,7 @@ app.post('/api/time-trackings', async (req, res) => {
 // 更新时间追踪记录
 app.put('/api/time-trackings/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const { task_id, description, start_time, end_time, duration } = req.body;
     const result = await update(
       'UPDATE time_trackings SET task_id = ?, description = ?, start_time = ?, end_time = ?, duration = ? WHERE id = ?',
@@ -278,6 +310,7 @@ app.put('/api/time-trackings/:id', async (req, res) => {
 // 停止时间追踪
 app.patch('/api/time-trackings/:id/stop', async (req, res) => {
   try {
+    await initializeDatabase();
     const end_time = new Date().toISOString();
     const [tracking] = await query('SELECT start_time FROM time_trackings WHERE id = ?', [req.params.id]);
     
@@ -305,6 +338,7 @@ app.patch('/api/time-trackings/:id/stop', async (req, res) => {
 // 删除时间追踪记录
 app.delete('/api/time-trackings/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const result = await del('DELETE FROM time_trackings WHERE id = ?', [req.params.id]);
     if (result.changes === 0) {
       return res.status(404).json({ error: '时间追踪记录不存在' });
@@ -322,6 +356,7 @@ app.delete('/api/time-trackings/:id', async (req, res) => {
 // 获取所有笔记本
 app.get('/api/notebooks', async (req, res) => {
   try {
+    await initializeDatabase();
     const rows = await query('SELECT * FROM notebooks ORDER BY updated_at DESC');
     res.json(rows);
   } catch (error) {
@@ -332,6 +367,7 @@ app.get('/api/notebooks', async (req, res) => {
 // 获取单个笔记本
 app.get('/api/notebooks/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const rows = await query('SELECT * FROM notebooks WHERE id = ?', [req.params.id]);
     if (rows.length === 0) {
       return res.status(404).json({ error: '笔记本不存在' });
@@ -345,6 +381,7 @@ app.get('/api/notebooks/:id', async (req, res) => {
 // 创建笔记本
 app.post('/api/notebooks', async (req, res) => {
   try {
+    await initializeDatabase();
     const { title, description, color, is_default = 0 } = req.body;
     const result = await insert(
       'INSERT INTO notebooks (title, description, color, is_default) VALUES (?, ?, ?, ?)',
@@ -359,6 +396,7 @@ app.post('/api/notebooks', async (req, res) => {
 // 更新笔记本
 app.put('/api/notebooks/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const { title, description, color, is_default } = req.body;
     const result = await update(
       'UPDATE notebooks SET title = ?, description = ?, color = ?, is_default = ? WHERE id = ?',
@@ -376,6 +414,7 @@ app.put('/api/notebooks/:id', async (req, res) => {
 // 删除笔记本
 app.delete('/api/notebooks/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const result = await del('DELETE FROM notebooks WHERE id = ?', [req.params.id]);
     if (result.changes === 0) {
       return res.status(404).json({ error: '笔记本不存在' });
@@ -393,6 +432,7 @@ app.delete('/api/notebooks/:id', async (req, res) => {
 // 获取所有笔记
 app.get('/api/notes', async (req, res) => {
   try {
+    await initializeDatabase();
     const { category, is_favorite, is_archived, notebook_id, sort_by = 'updated_at', order = 'desc' } = req.query;
     let sql = 'SELECT * FROM notes WHERE 1=1';
     const params = [];
@@ -430,6 +470,7 @@ app.get('/api/notes', async (req, res) => {
 // 获取单个笔记
 app.get('/api/notes/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const rows = await query('SELECT * FROM notes WHERE id = ?', [req.params.id]);
     if (rows.length === 0) {
       return res.status(404).json({ error: '笔记不存在' });
@@ -443,6 +484,7 @@ app.get('/api/notes/:id', async (req, res) => {
 // 创建笔记
 app.post('/api/notes', async (req, res) => {
   try {
+    await initializeDatabase();
     const { title, content, draft_content = '', category = '', tags = [], notebook_id = null, is_favorite = 0, is_archived = 0, is_marked = 0 } = req.body;
     // 确保tags是数组类型
     const safeTags = Array.isArray(tags) ? tags : [];
@@ -459,6 +501,7 @@ app.post('/api/notes', async (req, res) => {
 // 更新笔记
 app.put('/api/notes/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const { title, content, category, tags, notebook_id, is_favorite, is_archived, is_marked, ai_summary, mind_map } = req.body;
     
     // 验证必填字段
@@ -485,6 +528,7 @@ app.put('/api/notes/:id', async (req, res) => {
 // 更新笔记草稿
 app.patch('/api/notes/:id/draft', async (req, res) => {
   try {
+    await initializeDatabase();
     const { draft_content } = req.body;
     const result = await update(
       'UPDATE notes SET draft_content = ?, last_saved_at = CURRENT_TIMESTAMP WHERE id = ?',
@@ -505,6 +549,7 @@ app.patch('/api/notes/:id/draft', async (req, res) => {
 // 标记笔记
 app.patch('/api/notes/:id/mark', async (req, res) => {
   try {
+    await initializeDatabase();
     const { is_marked } = req.body;
     const result = await update(
       'UPDATE notes SET is_marked = ? WHERE id = ?',
@@ -522,6 +567,7 @@ app.patch('/api/notes/:id/mark', async (req, res) => {
 // 标记笔记为收藏
 app.patch('/api/notes/:id/favorite', async (req, res) => {
   try {
+    await initializeDatabase();
     const { is_favorite } = req.body;
     const result = await update(
       'UPDATE notes SET is_favorite = ? WHERE id = ?',
@@ -539,6 +585,7 @@ app.patch('/api/notes/:id/favorite', async (req, res) => {
 // 归档笔记
 app.patch('/api/notes/:id/archive', async (req, res) => {
   try {
+    await initializeDatabase();
     const { is_archived } = req.body;
     const result = await update(
       'UPDATE notes SET is_archived = ? WHERE id = ?',
@@ -556,6 +603,7 @@ app.patch('/api/notes/:id/archive', async (req, res) => {
 // 生成AI摘要
 app.post('/api/notes/:id/summary', async (req, res) => {
   try {
+    await initializeDatabase();
     // 这里应该调用AI接口生成摘要，现在模拟实现
     const [note] = await query('SELECT * FROM notes WHERE id = ?', [req.params.id]);
     if (!note) {
@@ -580,6 +628,7 @@ app.post('/api/notes/:id/summary', async (req, res) => {
 // 生成思维导图
 app.post('/api/notes/:id/mind-map', async (req, res) => {
   try {
+    await initializeDatabase();
     // 这里应该调用AI接口生成思维导图，现在模拟实现
     const [note] = await query('SELECT * FROM notes WHERE id = ?', [req.params.id]);
     if (!note) {
@@ -616,6 +665,7 @@ app.post('/api/notes/:id/mind-map', async (req, res) => {
 // 搜索笔记
 app.get('/api/notes/search', async (req, res) => {
   try {
+    await initializeDatabase();
     const { query: searchQuery, notebook_id } = req.query;
     if (!searchQuery) {
       return res.status(400).json({ error: '搜索关键词不能为空' });
@@ -641,6 +691,7 @@ app.get('/api/notes/search', async (req, res) => {
 // 删除笔记
 app.delete('/api/notes/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const result = await del('DELETE FROM notes WHERE id = ?', [req.params.id]);
     if (result.changes === 0) {
       return res.status(404).json({ error: '笔记不存在' });
@@ -658,6 +709,7 @@ app.delete('/api/notes/:id', async (req, res) => {
 // 获取所有代码片段
 app.get('/api/notes/:note_id/code-snippets', async (req, res) => {
   try {
+    await initializeDatabase();
     const rows = await query('SELECT * FROM code_snippets WHERE note_id = ? ORDER BY created_at DESC', [req.params.note_id]);
     res.json(rows);
   } catch (error) {
@@ -668,6 +720,7 @@ app.get('/api/notes/:note_id/code-snippets', async (req, res) => {
 // 获取单个代码片段
 app.get('/api/notes/:note_id/code-snippets/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const rows = await query('SELECT * FROM code_snippets WHERE note_id = ? AND id = ?', [req.params.note_id, req.params.id]);
     if (rows.length === 0) {
       return res.status(404).json({ error: '代码片段不存在' });
@@ -681,6 +734,7 @@ app.get('/api/notes/:note_id/code-snippets/:id', async (req, res) => {
 // 创建代码片段
 app.post('/api/notes/:note_id/code-snippets', async (req, res) => {
   try {
+    await initializeDatabase();
     const { language, code_content, run_params } = req.body;
     const result = await insert(
       'INSERT INTO code_snippets (note_id, language, code_content, run_params) VALUES (?, ?, ?, ?)',
@@ -695,6 +749,7 @@ app.post('/api/notes/:note_id/code-snippets', async (req, res) => {
 // 更新代码片段
 app.put('/api/notes/:note_id/code-snippets/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const { language, code_content, run_params, output } = req.body;
     const result = await update(
       'UPDATE code_snippets SET language = ?, code_content = ?, run_params = ?, output = ? WHERE note_id = ? AND id = ?',
@@ -712,6 +767,7 @@ app.put('/api/notes/:note_id/code-snippets/:id', async (req, res) => {
 // 删除代码片段
 app.delete('/api/notes/:note_id/code-snippets/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const result = await del('DELETE FROM code_snippets WHERE note_id = ? AND id = ?', [req.params.note_id, req.params.id]);
     if (result.changes === 0) {
       return res.status(404).json({ error: '代码片段不存在' });
@@ -725,6 +781,7 @@ app.delete('/api/notes/:note_id/code-snippets/:id', async (req, res) => {
 // 运行代码片段
 app.post('/api/notes/:note_id/code-snippets/:id/run', async (req, res) => {
   try {
+    await initializeDatabase();
     // 这里应该调用沙箱执行代码，现在模拟实现
     const [snippet] = await query('SELECT * FROM code_snippets WHERE note_id = ? AND id = ?', [req.params.note_id, req.params.id]);
     if (!snippet) {
@@ -753,6 +810,7 @@ app.post('/api/notes/:note_id/code-snippets/:id/run', async (req, res) => {
 // 获取笔记关联
 app.get('/api/notes/:id/relations', async (req, res) => {
   try {
+    await initializeDatabase();
     const rows = await query('SELECT * FROM note_relations WHERE note_id = ?', [req.params.id]);
     res.json(rows);
   } catch (error) {
@@ -763,6 +821,7 @@ app.get('/api/notes/:id/relations', async (req, res) => {
 // 添加笔记关联
 app.post('/api/notes/:id/relations', async (req, res) => {
   try {
+    await initializeDatabase();
     const { related_note_id, relation_type = 'related' } = req.body;
     const result = await insert(
       'INSERT INTO note_relations (note_id, related_note_id, relation_type) VALUES (?, ?, ?)',
@@ -777,6 +836,7 @@ app.post('/api/notes/:id/relations', async (req, res) => {
 // 删除笔记关联
 app.delete('/api/notes/:id/relations/:related_note_id', async (req, res) => {
   try {
+    await initializeDatabase();
     const result = await del('DELETE FROM note_relations WHERE note_id = ? AND related_note_id = ?', [req.params.id, req.params.related_note_id]);
     if (result.changes === 0) {
       return res.status(404).json({ error: '笔记关联不存在' });
@@ -798,6 +858,7 @@ app.delete('/api/notes/:id/relations/:related_note_id', async (req, res) => {
 // 获取所有健康记录
 app.get('/api/health-records', async (req, res) => {
   try {
+    await initializeDatabase();
     const { type, date } = req.query;
     let sql = 'SELECT * FROM health_records WHERE 1=1';
     const params = [];
@@ -822,6 +883,7 @@ app.get('/api/health-records', async (req, res) => {
 // 获取单个健康记录
 app.get('/api/health-records/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const rows = await query('SELECT * FROM health_records WHERE id = ?', [req.params.id]);
     if (rows.length === 0) {
       return res.status(404).json({ error: '健康记录不存在' });
@@ -835,6 +897,7 @@ app.get('/api/health-records/:id', async (req, res) => {
 // 创建健康记录
 app.post('/api/health-records', async (req, res) => {
   try {
+    await initializeDatabase();
     const { type, value, unit, date, notes } = req.body;
     const result = await insert(
       'INSERT INTO health_records (type, value, unit, date, notes) VALUES (?, ?, ?, ?, ?)',
@@ -849,6 +912,7 @@ app.post('/api/health-records', async (req, res) => {
 // 更新健康记录
 app.put('/api/health-records/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const { type, value, unit, date, notes } = req.body;
     const result = await update(
       'UPDATE health_records SET type = ?, value = ?, unit = ?, date = ?, notes = ? WHERE id = ?',
@@ -866,6 +930,7 @@ app.put('/api/health-records/:id', async (req, res) => {
 // 删除健康记录
 app.delete('/api/health-records/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const result = await del('DELETE FROM health_records WHERE id = ?', [req.params.id]);
     if (result.changes === 0) {
       return res.status(404).json({ error: '健康记录不存在' });
@@ -883,6 +948,7 @@ app.delete('/api/health-records/:id', async (req, res) => {
 // 获取所有运动记录
 app.get('/api/exercise-records', async (req, res) => {
   try {
+    await initializeDatabase();
     const { type, date, intensity } = req.query;
     let sql = 'SELECT * FROM exercise_records WHERE 1=1';
     const params = [];
@@ -911,6 +977,7 @@ app.get('/api/exercise-records', async (req, res) => {
 // 获取单个运动记录
 app.get('/api/exercise-records/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const rows = await query('SELECT * FROM exercise_records WHERE id = ?', [req.params.id]);
     if (rows.length === 0) {
       return res.status(404).json({ error: '运动记录不存在' });
@@ -924,6 +991,7 @@ app.get('/api/exercise-records/:id', async (req, res) => {
 // 创建运动记录
 app.post('/api/exercise-records', async (req, res) => {
   try {
+    await initializeDatabase();
     const { type, duration, intensity = 'moderate', calories_burned, date, notes } = req.body;
     const result = await insert(
       'INSERT INTO exercise_records (type, duration, intensity, calories_burned, date, notes) VALUES (?, ?, ?, ?, ?, ?)',
@@ -938,6 +1006,7 @@ app.post('/api/exercise-records', async (req, res) => {
 // 更新运动记录
 app.put('/api/exercise-records/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const { type, duration, intensity, calories_burned, date, notes } = req.body;
     const result = await update(
       'UPDATE exercise_records SET type = ?, duration = ?, intensity = ?, calories_burned = ?, date = ?, notes = ? WHERE id = ?',
@@ -955,6 +1024,7 @@ app.put('/api/exercise-records/:id', async (req, res) => {
 // 删除运动记录
 app.delete('/api/exercise-records/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const result = await del('DELETE FROM exercise_records WHERE id = ?', [req.params.id]);
     if (result.changes === 0) {
       return res.status(404).json({ error: '运动记录不存在' });
@@ -972,6 +1042,7 @@ app.delete('/api/exercise-records/:id', async (req, res) => {
 // 获取所有睡眠记录
 app.get('/api/sleep-records', async (req, res) => {
   try {
+    await initializeDatabase();
     const { date, quality } = req.query;
     let sql = 'SELECT * FROM sleep_records WHERE 1=1';
     const params = [];
@@ -996,6 +1067,7 @@ app.get('/api/sleep-records', async (req, res) => {
 // 获取单个睡眠记录
 app.get('/api/sleep-records/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const rows = await query('SELECT * FROM sleep_records WHERE id = ?', [req.params.id]);
     if (rows.length === 0) {
       return res.status(404).json({ error: '睡眠记录不存在' });
@@ -1009,6 +1081,7 @@ app.get('/api/sleep-records/:id', async (req, res) => {
 // 创建睡眠记录
 app.post('/api/sleep-records', async (req, res) => {
   try {
+    await initializeDatabase();
     const { bedtime, wakeup_time, duration, quality = 'good', notes, date } = req.body;
     const result = await insert(
       'INSERT INTO sleep_records (bedtime, wakeup_time, duration, quality, notes, date) VALUES (?, ?, ?, ?, ?, ?)',
@@ -1023,6 +1096,7 @@ app.post('/api/sleep-records', async (req, res) => {
 // 更新睡眠记录
 app.put('/api/sleep-records/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const { bedtime, wakeup_time, duration, quality, notes, date } = req.body;
     const result = await update(
       'UPDATE sleep_records SET bedtime = ?, wakeup_time = ?, duration = ?, quality = ?, notes = ?, date = ? WHERE id = ?',
@@ -1040,6 +1114,7 @@ app.put('/api/sleep-records/:id', async (req, res) => {
 // 删除睡眠记录
 app.delete('/api/sleep-records/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const result = await del('DELETE FROM sleep_records WHERE id = ?', [req.params.id]);
     if (result.changes === 0) {
       return res.status(404).json({ error: '睡眠记录不存在' });
@@ -1057,6 +1132,7 @@ app.delete('/api/sleep-records/:id', async (req, res) => {
 // 获取所有食物
 app.get('/api/foods', async (req, res) => {
   try {
+    await initializeDatabase();
     const { category, search } = req.query;
     let sql = 'SELECT * FROM foods WHERE 1=1';
     const params = [];
@@ -1081,6 +1157,7 @@ app.get('/api/foods', async (req, res) => {
 // 获取单个食物
 app.get('/api/foods/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const rows = await query('SELECT * FROM foods WHERE id = ?', [req.params.id]);
     if (rows.length === 0) {
       return res.status(404).json({ error: '食物不存在' });
@@ -1094,6 +1171,7 @@ app.get('/api/foods/:id', async (req, res) => {
 // 创建食物
 app.post('/api/foods', async (req, res) => {
   try {
+    await initializeDatabase();
     const { name, category, calories, carbs, protein, fat } = req.body;
     const result = await insert(
       'INSERT INTO foods (name, category, calories, carbs, protein, fat) VALUES (?, ?, ?, ?, ?, ?)',
@@ -1112,6 +1190,7 @@ app.post('/api/foods', async (req, res) => {
 // 获取所有餐食记录
 app.get('/api/meal-records', async (req, res) => {
   try {
+    await initializeDatabase();
     const { date, meal_type } = req.query;
     let sql = 'SELECT * FROM meal_records WHERE 1=1';
     const params = [];
@@ -1136,6 +1215,7 @@ app.get('/api/meal-records', async (req, res) => {
 // 创建餐食记录
 app.post('/api/meal-records', async (req, res) => {
   try {
+    await initializeDatabase();
     const { food_id, food_name, food_category, serving_size, calories, carbs, protein, fat, meal_type, date } = req.body;
     const result = await insert(
       'INSERT INTO meal_records (food_id, food_name, food_category, serving_size, calories, carbs, protein, fat, meal_type, date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -1150,6 +1230,7 @@ app.post('/api/meal-records', async (req, res) => {
 // 删除餐食记录
 app.delete('/api/meal-records/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const result = await del('DELETE FROM meal_records WHERE id = ?', [req.params.id]);
     if (result.changes === 0) {
       return res.status(404).json({ error: '餐食记录不存在' });
@@ -1171,6 +1252,7 @@ app.delete('/api/meal-records/:id', async (req, res) => {
 // 获取所有收入记录
 app.get('/api/income-records', async (req, res) => {
   try {
+    await initializeDatabase();
     const { category, source, date } = req.query;
     let sql = 'SELECT * FROM income_records WHERE 1=1';
     const params = [];
@@ -1199,6 +1281,7 @@ app.get('/api/income-records', async (req, res) => {
 // 获取单个收入记录
 app.get('/api/income-records/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const rows = await query('SELECT * FROM income_records WHERE id = ?', [req.params.id]);
     if (rows.length === 0) {
       return res.status(404).json({ error: '收入记录不存在' });
@@ -1212,6 +1295,7 @@ app.get('/api/income-records/:id', async (req, res) => {
 // 创建收入记录
 app.post('/api/income-records', async (req, res) => {
   try {
+    await initializeDatabase();
     const { amount, source, category, date, notes } = req.body;
     const result = await insert(
       'INSERT INTO income_records (amount, source, category, date, notes) VALUES (?, ?, ?, ?, ?)',
@@ -1226,6 +1310,7 @@ app.post('/api/income-records', async (req, res) => {
 // 更新收入记录
 app.put('/api/income-records/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const { amount, source, category, date, notes } = req.body;
     const result = await update(
       'UPDATE income_records SET amount = ?, source = ?, category = ?, date = ?, notes = ? WHERE id = ?',
@@ -1243,6 +1328,7 @@ app.put('/api/income-records/:id', async (req, res) => {
 // 删除收入记录
 app.delete('/api/income-records/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const result = await del('DELETE FROM income_records WHERE id = ?', [req.params.id]);
     if (result.changes === 0) {
       return res.status(404).json({ error: '收入记录不存在' });
@@ -1260,6 +1346,7 @@ app.delete('/api/income-records/:id', async (req, res) => {
 // 获取所有支出记录
 app.get('/api/expense-records', async (req, res) => {
   try {
+    await initializeDatabase();
     const { category, payment_method, date } = req.query;
     let sql = 'SELECT * FROM expense_records WHERE 1=1';
     const params = [];
@@ -1288,6 +1375,7 @@ app.get('/api/expense-records', async (req, res) => {
 // 获取单个支出记录
 app.get('/api/expense-records/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const rows = await query('SELECT * FROM expense_records WHERE id = ?', [req.params.id]);
     if (rows.length === 0) {
       return res.status(404).json({ error: '支出记录不存在' });
@@ -1301,6 +1389,7 @@ app.get('/api/expense-records/:id', async (req, res) => {
 // 创建支出记录
 app.post('/api/expense-records', async (req, res) => {
   try {
+    await initializeDatabase();
     const { amount, category, description, date, payment_method, notes } = req.body;
     const result = await insert(
       'INSERT INTO expense_records (amount, category, description, date, payment_method, notes) VALUES (?, ?, ?, ?, ?, ?)',
@@ -1315,6 +1404,7 @@ app.post('/api/expense-records', async (req, res) => {
 // 更新支出记录
 app.put('/api/expense-records/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const { amount, category, description, date, payment_method, notes } = req.body;
     const result = await update(
       'UPDATE expense_records SET amount = ?, category = ?, description = ?, date = ?, payment_method = ?, notes = ? WHERE id = ?',
@@ -1332,6 +1422,7 @@ app.put('/api/expense-records/:id', async (req, res) => {
 // 删除支出记录
 app.delete('/api/expense-records/:id', async (req, res) => {
   try {
+    await initializeDatabase();
     const result = await del('DELETE FROM expense_records WHERE id = ?', [req.params.id]);
     if (result.changes === 0) {
       return res.status(404).json({ error: '支出记录不存在' });
@@ -1342,26 +1433,5 @@ app.delete('/api/expense-records/:id', async (req, res) => {
   }
 });
 
-/**
- * 启动服务器
- */
-async function startServer() {
-  try {
-    // 测试数据库连接
-    await testConnection();
-    
-    // 初始化数据库表
-    await initDatabase();
-    
-    // 启动服务器
-    app.listen(PORT, () => {
-      console.log(`服务器运行在 http://localhost:${PORT}`);
-    });
-  } catch (error) {
-    console.error('启动服务器失败:', error.message);
-    process.exit(1);
-  }
-}
-
-// 启动服务器
-startServer();
+// 导出app实例，用于Vercel部署
+module.exports = app;
