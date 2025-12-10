@@ -7,7 +7,7 @@ import axios from 'axios';
 
 // 创建axios实例
 const api = axios.create({
-  baseURL: 'http://localhost:3000/api',
+  baseURL: 'https://multi-module-app-r9bn-1a74ypgsx-sans-projects-97fe81a5.vercel.app/api',
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json'
