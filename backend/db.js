@@ -15,31 +15,45 @@ let pool;
 // 测试数据库连接并创建数据库
 async function testConnection() {
   try {
-    // 解析环境变量，确保密码不是空字符串
-    const dbPassword = process.env.DB_PASSWORD;
-    const isPasswordSet = dbPassword && typeof dbPassword === 'string' && dbPassword.trim() !== '';
-    
-    // 创建连接池配置
-    const mainPoolConfig = {
-      host: process.env.DB_HOST || 'localhost',
-      user: process.env.DB_USER || 'postgres',
-      port: process.env.DB_PORT || 5432,
-      database: dbName,
-      max: 10, // 连接池中的最大连接数
-      idleTimeoutMillis: 30000, // 空闲连接超时时间
-      connectionTimeoutMillis: 2000, // 连接超时时间
-      ssl: {
-        rejectUnauthorized: false // 允许自签名证书，Supabase需要
+    // 检查是否有Vercel Postgres的连接URL
+    if (process.env.POSTGRES_URL) {
+      // 使用Vercel Postgres连接URL
+      pool = new Pool({
+        connectionString: process.env.POSTGRES_URL,
+        ssl: {
+          rejectUnauthorized: false
+        },
+        max: 10,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 5000
+      });
+    } else {
+      // 解析环境变量，确保密码不是空字符串
+      const dbPassword = process.env.DB_PASSWORD;
+      const isPasswordSet = dbPassword && typeof dbPassword === 'string' && dbPassword.trim() !== '';
+      
+      // 创建连接池配置
+      const mainPoolConfig = {
+        host: process.env.DB_HOST || 'localhost',
+        user: process.env.DB_USER || 'postgres',
+        port: process.env.DB_PORT || 5432,
+        database: dbName,
+        max: 10, // 连接池中的最大连接数
+        idleTimeoutMillis: 30000, // 空闲连接超时时间
+        connectionTimeoutMillis: 5000, // 增加连接超时时间
+        ssl: {
+          rejectUnauthorized: false // 允许自签名证书，Supabase需要
+        }
+      };
+      
+      // 只有当密码存在且不为空字符串时才添加密码配置
+      if (isPasswordSet) {
+        mainPoolConfig.password = dbPassword;
       }
-    };
-    
-    // 只有当密码存在且不为空字符串时才添加密码配置
-    if (isPasswordSet) {
-      mainPoolConfig.password = dbPassword;
+      
+      // 创建连接池
+      pool = new Pool(mainPoolConfig);
     }
-    
-    // 创建连接池
-    pool = new Pool(mainPoolConfig);
     
     // 测试连接
     const testClient = await pool.connect();
