@@ -15,14 +15,22 @@ let pool;
 // 测试数据库连接并创建数据库
 async function testConnection() {
   try {
+    // 基础SSL配置，处理自签名证书
+    const sslConfig = {
+      rejectUnauthorized: false,
+      requestCert: false,
+      agent: false
+    };
+    
     // 检查是否有Vercel Postgres的连接URL
     if (process.env.POSTGRES_URL) {
-      // 使用Vercel Postgres连接URL
+      // 使用Vercel Postgres连接URL，提取SSL配置
+      const connectionString = process.env.POSTGRES_URL;
+      
+      // 创建连接池配置
       pool = new Pool({
-        connectionString: process.env.POSTGRES_URL,
-        ssl: {
-          rejectUnauthorized: false
-        },
+        connectionString: connectionString,
+        ssl: connectionString.includes('sslmode=disable') ? false : sslConfig,
         max: 10,
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 5000
@@ -41,9 +49,7 @@ async function testConnection() {
         max: 10, // 连接池中的最大连接数
         idleTimeoutMillis: 30000, // 空闲连接超时时间
         connectionTimeoutMillis: 5000, // 增加连接超时时间
-        ssl: {
-          rejectUnauthorized: false // 允许自签名证书，Supabase需要
-        }
+        ssl: sslConfig // 应用SSL配置
       };
       
       // 只有当密码存在且不为空字符串时才添加密码配置
@@ -66,7 +72,52 @@ async function testConnection() {
   } catch (err) {
     console.error('数据库连接失败:', err.message);
     console.error('错误堆栈:', err.stack);
-    throw err;
+    
+    // 尝试无SSL连接作为备选方案
+    try {
+      console.log('尝试无SSL连接...');
+      
+      if (process.env.POSTGRES_URL) {
+        pool = new Pool({
+          connectionString: process.env.POSTGRES_URL,
+          ssl: false,
+          max: 10,
+          idleTimeoutMillis: 30000,
+          connectionTimeoutMillis: 5000
+        });
+      } else {
+        const dbPassword = process.env.DB_PASSWORD;
+        const isPasswordSet = dbPassword && typeof dbPassword === 'string' && dbPassword.trim() !== '';
+        
+        const mainPoolConfig = {
+          host: process.env.DB_HOST || 'localhost',
+          user: process.env.DB_USER || 'postgres',
+          port: process.env.DB_PORT || 5432,
+          database: dbName,
+          max: 10,
+          idleTimeoutMillis: 30000,
+          connectionTimeoutMillis: 5000,
+          ssl: false // 禁用SSL
+        };
+        
+        if (isPasswordSet) {
+          mainPoolConfig.password = dbPassword;
+        }
+        
+        pool = new Pool(mainPoolConfig);
+      }
+      
+      // 测试备选连接
+      const testClient = await pool.connect();
+      await testClient.query('SELECT NOW()');
+      testClient.release();
+      
+      console.log('无SSL连接成功');
+      return pool;
+    } catch (backupErr) {
+      console.error('无SSL连接也失败:', backupErr.message);
+      throw err; // 抛出原始错误
+    }
   }
 }
 
