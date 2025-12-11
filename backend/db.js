@@ -15,51 +15,40 @@ let pool;
 // 测试数据库连接并创建数据库
 async function testConnection() {
   try {
-    // 基础SSL配置，处理自签名证书
+    // 完全禁用SSL验证，处理自签名证书问题
     const sslConfig = {
       rejectUnauthorized: false,
-      requestCert: false,
-      agent: false
+      require: false,
+      sslmode: 'disable' // 明确设置sslmode为disable
     };
     
-    // 检查是否有Vercel Postgres的连接URL
-    if (process.env.POSTGRES_URL) {
-      // 使用Vercel Postgres连接URL，提取SSL配置
-      const connectionString = process.env.POSTGRES_URL;
-      
-      // 创建连接池配置
-      pool = new Pool({
-        connectionString: connectionString,
-        ssl: connectionString.includes('sslmode=disable') ? false : sslConfig,
-        max: 10,
-        idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 5000
-      });
-    } else {
-      // 解析环境变量，确保密码不是空字符串
-      const dbPassword = process.env.DB_PASSWORD;
-      const isPasswordSet = dbPassword && typeof dbPassword === 'string' && dbPassword.trim() !== '';
-      
-      // 创建连接池配置
-      const mainPoolConfig = {
-        host: process.env.DB_HOST || 'localhost',
-        user: process.env.DB_USER || 'postgres',
-        port: process.env.DB_PORT || 5432,
-        database: dbName,
-        max: 10, // 连接池中的最大连接数
-        idleTimeoutMillis: 30000, // 空闲连接超时时间
-        connectionTimeoutMillis: 5000, // 增加连接超时时间
-        ssl: sslConfig // 应用SSL配置
-      };
-      
-      // 只有当密码存在且不为空字符串时才添加密码配置
-      if (isPasswordSet) {
-        mainPoolConfig.password = dbPassword;
-      }
-      
-      // 创建连接池
-      pool = new Pool(mainPoolConfig);
+    // 解析环境变量
+    const dbHost = process.env.DB_HOST || 'localhost';
+    const dbUser = process.env.DB_USER || 'postgres';
+    const dbPassword = process.env.DB_PASSWORD;
+    const dbPort = process.env.DB_PORT || 5432;
+    
+    // 创建连接池配置
+    const poolConfig = {
+      host: dbHost,
+      user: dbUser,
+      port: dbPort,
+      database: dbName,
+      max: 10,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 5000,
+      ssl: false, // 完全禁用SSL
+      // 明确设置sslmode
+      sslmode: 'disable'
+    };
+    
+    // 添加密码（如果存在）
+    if (dbPassword && typeof dbPassword === 'string' && dbPassword.trim() !== '') {
+      poolConfig.password = dbPassword;
     }
+    
+    // 创建连接池
+    pool = new Pool(poolConfig);
     
     // 测试连接
     const testClient = await pool.connect();
@@ -67,56 +56,46 @@ async function testConnection() {
     testClient.release();
     
     console.log('数据库连接池创建成功');
-    
     return pool;
   } catch (err) {
     console.error('数据库连接失败:', err.message);
     console.error('错误堆栈:', err.stack);
     
-    // 尝试无SSL连接作为备选方案
+    // 尝试使用更简单的连接方式，直接禁用SSL
     try {
-      console.log('尝试无SSL连接...');
+      console.log('尝试使用更简单的连接方式...');
       
-      if (process.env.POSTGRES_URL) {
-        pool = new Pool({
-          connectionString: process.env.POSTGRES_URL,
-          ssl: false,
-          max: 10,
-          idleTimeoutMillis: 30000,
-          connectionTimeoutMillis: 5000
-        });
+      // 构建完整的连接字符串，明确禁用SSL
+      let connectionString = `postgresql://${process.env.DB_USER || 'postgres'}:`;
+      if (process.env.DB_PASSWORD) {
+        connectionString += `${process.env.DB_PASSWORD}@`;
       } else {
-        const dbPassword = process.env.DB_PASSWORD;
-        const isPasswordSet = dbPassword && typeof dbPassword === 'string' && dbPassword.trim() !== '';
-        
-        const mainPoolConfig = {
-          host: process.env.DB_HOST || 'localhost',
-          user: process.env.DB_USER || 'postgres',
-          port: process.env.DB_PORT || 5432,
-          database: dbName,
-          max: 10,
-          idleTimeoutMillis: 30000,
-          connectionTimeoutMillis: 5000,
-          ssl: false // 禁用SSL
-        };
-        
-        if (isPasswordSet) {
-          mainPoolConfig.password = dbPassword;
-        }
-        
-        pool = new Pool(mainPoolConfig);
+        connectionString += '@';
       }
+      connectionString += `${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 5432}/${dbName}`;
+      connectionString += '?sslmode=disable'; // 明确禁用SSL
       
-      // 测试备选连接
+      console.log('连接字符串:', connectionString.replace(/:.*@/, ':***@')); // 隐藏密码
+      
+      // 使用连接字符串创建连接池
+      pool = new Pool({
+        connectionString: connectionString,
+        max: 10,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 5000
+      });
+      
+      // 测试连接
       const testClient = await pool.connect();
       await testClient.query('SELECT NOW()');
       testClient.release();
       
-      console.log('无SSL连接成功');
+      console.log('连接成功');
       return pool;
-    } catch (backupErr) {
-      console.error('无SSL连接也失败:', backupErr.message);
-      throw err; // 抛出原始错误
+    } catch (simpleErr) {
+      console.error('简单连接方式也失败:', simpleErr.message);
+      console.error('错误堆栈:', simpleErr.stack);
+      throw simpleErr; // 抛出最新错误，包含更多调试信息
     }
   }
 }
