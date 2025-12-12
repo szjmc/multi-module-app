@@ -15,18 +15,27 @@ let pool;
 // 测试数据库连接并创建数据库
 async function testConnection() {
   try {
-    // 完全禁用SSL验证，处理自签名证书问题
-    const sslConfig = {
-      rejectUnauthorized: false,
-      require: false,
-      sslmode: 'disable' // 明确设置sslmode为disable
-    };
+    // 记录环境变量（隐藏敏感信息）
+    console.log('=== 环境变量信息 ===');
+    console.log('DB_HOST:', process.env.DB_HOST || 'db.fensjjsxbptfjfokggjh.supabase.co');
+    console.log('DB_USER:', process.env.DB_USER || 'postgres');
+    console.log('DB_PASSWORD:', process.env.DB_PASSWORD || 'kJ5Lo50pOcGWibq');
+    console.log('DB_PORT:', process.env.DB_PORT || 5432);
+    console.log('DB_NAME:', process.env.DB_NAME || 'postgres');
+    console.log('POSTGRES_URL:', process.env.POSTGRES_URL ? process.env.POSTGRES_URL.replace(/:.*@/, ':***@') : '未设置');
+    console.log('===================');
     
     // 解析环境变量
-    const dbHost = process.env.DB_HOST || 'localhost';
+    const dbHost = process.env.DB_HOST || 'db.fensjjsxbptfjfokggjh.supabase.co';
     const dbUser = process.env.DB_USER || 'postgres';
     const dbPassword = process.env.DB_PASSWORD;
     const dbPort = process.env.DB_PORT || 5432;
+    
+    // 检查环境变量是否正确设置
+    if (dbHost === 'db.fensjjsxbptfjfokggjh.supabase.co' && process.env.NODE_ENV === 'production') {
+      console.warn('警告：在生产环境中使用localhost作为数据库主机，这可能导致连接失败');
+      throw new Error('生产环境中必须配置正确的数据库主机地址');
+    }
     
     // 创建连接池配置
     const poolConfig = {
@@ -38,7 +47,6 @@ async function testConnection() {
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 5000,
       ssl: false, // 完全禁用SSL
-      // 明确设置sslmode
       sslmode: 'disable'
     };
     
@@ -47,8 +55,19 @@ async function testConnection() {
       poolConfig.password = dbPassword;
     }
     
+    console.log('连接配置:', {
+      host: poolConfig.host,
+      user: poolConfig.user,
+      port: poolConfig.port,
+      database: poolConfig.database,
+      ssl: poolConfig.ssl,
+      sslmode: poolConfig.sslmode
+    });
+    
     // 创建连接池
     pool = new Pool(poolConfig);
+    
+    console.log('连接池已创建，正在测试连接...');
     
     // 测试连接
     const testClient = await pool.connect();
@@ -61,42 +80,27 @@ async function testConnection() {
     console.error('数据库连接失败:', err.message);
     console.error('错误堆栈:', err.stack);
     
-    // 尝试使用更简单的连接方式，直接禁用SSL
-    try {
-      console.log('尝试使用更简单的连接方式...');
-      
-      // 构建完整的连接字符串，明确禁用SSL
-      let connectionString = `postgresql://${process.env.DB_USER || 'postgres'}:`;
-      if (process.env.DB_PASSWORD) {
-        connectionString += `${process.env.DB_PASSWORD}@`;
-      } else {
-        connectionString += '@';
-      }
-      connectionString += `${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 5432}/${dbName}`;
-      connectionString += '?sslmode=disable'; // 明确禁用SSL
-      
-      console.log('连接字符串:', connectionString.replace(/:.*@/, ':***@')); // 隐藏密码
-      
-      // 使用连接字符串创建连接池
-      pool = new Pool({
-        connectionString: connectionString,
-        max: 10,
-        idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 5000
-      });
-      
-      // 测试连接
-      const testClient = await pool.connect();
-      await testClient.query('SELECT NOW()');
-      testClient.release();
-      
-      console.log('连接成功');
-      return pool;
-    } catch (simpleErr) {
-      console.error('简单连接方式也失败:', simpleErr.message);
-      console.error('错误堆栈:', simpleErr.stack);
-      throw simpleErr; // 抛出最新错误，包含更多调试信息
+    // 检查是否是连接被拒绝错误
+    if (err.message.includes('ECONNREFUSED')) {
+      console.error('连接被拒绝，请检查：');
+      console.error('1. 数据库服务是否正在运行');
+      console.error('2. 数据库主机地址是否正确');
+      console.error('3. 数据库端口是否正确');
+      console.error('4. 防火墙是否允许连接');
+      console.error('5. 环境变量是否正确配置');
     }
+    
+    // 尝试返回自定义错误，包含更多信息
+    const customError = new Error(`数据库连接失败: ${err.message}`);
+    customError.originalError = err;
+    customError.environment = {
+      host: process.env.DB_HOST || 'localhost',
+      port: process.env.DB_PORT || 5432,
+      user: process.env.DB_USER || 'postgres',
+      database: dbName
+    };
+    
+    throw customError;
   }
 }
 
