@@ -7,7 +7,7 @@ const { Pool } = require('pg');
 require('dotenv').config();
 
 // 数据库名称
-const dbName = process.env.DB_NAME || 'todo_app';
+const dbName = process.env.DB_NAME || 'postgres';
 
 // 初始化pool变量
 let pool;
@@ -17,24 +17,51 @@ async function testConnection() {
   try {
     // 记录环境变量（隐藏敏感信息）
     console.log('=== 环境变量信息 ===');
-    console.log('DB_HOST:', process.env.DB_HOST || 'db.fensjjsxbptfjfokggjh.supabase.co');
+    console.log('DB_HOST:', process.env.DB_HOST || 'localhost');
     console.log('DB_USER:', process.env.DB_USER || 'postgres');
-    console.log('DB_PASSWORD:', process.env.DB_PASSWORD || 'kJ5Lo50pOcGWibq');
+    console.log('DB_PASSWORD:', process.env.DB_PASSWORD ? '***' : '未设置');
     console.log('DB_PORT:', process.env.DB_PORT || 5432);
-    console.log('DB_NAME:', process.env.DB_NAME || 'postgres');
+    console.log('DB_NAME:', dbName);
     console.log('POSTGRES_URL:', process.env.POSTGRES_URL ? process.env.POSTGRES_URL.replace(/:.*@/, ':***@') : '未设置');
+    console.log('POSTGRES_HOST:', process.env.POSTGRES_HOST || '未设置');
+    console.log('POSTGRES_USER:', process.env.POSTGRES_USER || '未设置');
     console.log('===================');
     
-    // 解析环境变量
-    const dbHost = process.env.DB_HOST || 'db.fensjjsxbptfjfokggjh.supabase.co';
-    const dbUser = process.env.DB_USER || 'postgres';
-    const dbPassword = process.env.DB_PASSWORD;
+    // 优先使用Vercel/Supabase提供的POSTGRES_URL
+    if (process.env.POSTGRES_URL) {
+      console.log('使用POSTGRES_URL连接数据库...');
+      
+      // 创建连接池配置
+      pool = new Pool({
+        connectionString: process.env.POSTGRES_URL,
+        max: 10,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 5000
+        // 连接URL中已包含sslmode=require，不需要显式设置SSL
+      });
+      
+      // 测试连接
+      console.log('连接池已创建，正在测试连接...');
+      const testClient = await pool.connect();
+      await testClient.query('SELECT NOW()');
+      testClient.release();
+      
+      console.log('数据库连接池创建成功');
+      return pool;
+    }
+    
+    // 如果没有POSTGRES_URL，使用传统的连接方式
+    console.log('使用传统连接方式...');
+    
+    // 解析环境变量，使用Supabase的环境变量优先级高于传统环境变量
+    const dbHost = process.env.POSTGRES_HOST || process.env.DB_HOST || 'localhost';
+    const dbUser = process.env.POSTGRES_USER || process.env.DB_USER || 'postgres';
+    const dbPassword = process.env.POSTGRES_PASSWORD || process.env.DB_PASSWORD;
     const dbPort = process.env.DB_PORT || 5432;
     
     // 检查环境变量是否正确设置
-    if (dbHost === 'db.fensjjsxbptfjfokggjh.supabase.co' && process.env.NODE_ENV === 'production') {
+    if (dbHost === 'localhost' && process.env.NODE_ENV === 'production') {
       console.warn('警告：在生产环境中使用localhost作为数据库主机，这可能导致连接失败');
-      throw new Error('生产环境中必须配置正确的数据库主机地址');
     }
     
     // 创建连接池配置
@@ -46,8 +73,8 @@ async function testConnection() {
       max: 10,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 5000,
-      ssl: false, // 完全禁用SSL
-      sslmode: 'disable'
+      ssl: true, // Supabase需要SSL
+      sslmode: 'require'
     };
     
     // 添加密码（如果存在）
@@ -67,9 +94,8 @@ async function testConnection() {
     // 创建连接池
     pool = new Pool(poolConfig);
     
-    console.log('连接池已创建，正在测试连接...');
-    
     // 测试连接
+    console.log('连接池已创建，正在测试连接...');
     const testClient = await pool.connect();
     await testClient.query('SELECT NOW()');
     testClient.release();
@@ -94,10 +120,11 @@ async function testConnection() {
     const customError = new Error(`数据库连接失败: ${err.message}`);
     customError.originalError = err;
     customError.environment = {
-      host: process.env.DB_HOST || 'localhost',
+      host: process.env.POSTGRES_HOST || process.env.DB_HOST || 'localhost',
       port: process.env.DB_PORT || 5432,
-      user: process.env.DB_USER || 'postgres',
-      database: dbName
+      user: process.env.POSTGRES_USER || process.env.DB_USER || 'postgres',
+      database: dbName,
+      hasPostgresUrl: !!process.env.POSTGRES_URL
     };
     
     throw customError;
@@ -135,11 +162,11 @@ async function initDatabase() {
     const createTasksUpdateTrigger = `
       CREATE OR REPLACE FUNCTION update_tasks_updated_at()
       RETURNS TRIGGER AS $$
-      BEGIN
-        NEW.updated_at = CURRENT_TIMESTAMP;
-        RETURN NEW;
-      END;
-      $$ LANGUAGE plpgsql;
+BEGIN
+  NEW.updated_at = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
       
       DROP TRIGGER IF EXISTS update_tasks_updated_at ON tasks;
       CREATE TRIGGER update_tasks_updated_at
@@ -167,11 +194,11 @@ async function initDatabase() {
     const createEventsUpdateTrigger = `
       CREATE OR REPLACE FUNCTION update_events_updated_at()
       RETURNS TRIGGER AS $$
-      BEGIN
-        NEW.updated_at = CURRENT_TIMESTAMP;
-        RETURN NEW;
-      END;
-      $$ LANGUAGE plpgsql;
+BEGIN
+  NEW.updated_at = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
       
       DROP TRIGGER IF EXISTS update_events_updated_at ON events;
       CREATE TRIGGER update_events_updated_at
@@ -223,11 +250,11 @@ async function initDatabase() {
     const createNotebooksUpdateTrigger = `
       CREATE OR REPLACE FUNCTION update_notebooks_updated_at()
       RETURNS TRIGGER AS $$
-      BEGIN
-        NEW.updated_at = CURRENT_TIMESTAMP;
-        RETURN NEW;
-      END;
-      $$ LANGUAGE plpgsql;
+BEGIN
+  NEW.updated_at = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
       
       DROP TRIGGER IF EXISTS update_notebooks_updated_at ON notebooks;
       CREATE TRIGGER update_notebooks_updated_at
@@ -277,11 +304,11 @@ async function initDatabase() {
     const createNotesUpdateTrigger = `
       CREATE OR REPLACE FUNCTION update_notes_updated_at()
       RETURNS TRIGGER AS $$
-      BEGIN
-        NEW.updated_at = CURRENT_TIMESTAMP;
-        RETURN NEW;
-      END;
-      $$ LANGUAGE plpgsql;
+BEGIN
+  NEW.updated_at = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
       
       DROP TRIGGER IF EXISTS update_notes_updated_at ON notes;
       CREATE TRIGGER update_notes_updated_at
@@ -323,11 +350,11 @@ async function initDatabase() {
     const createCodeSnippetsUpdateTrigger = `
       CREATE OR REPLACE FUNCTION update_code_snippets_updated_at()
       RETURNS TRIGGER AS $$
-      BEGIN
-        NEW.updated_at = CURRENT_TIMESTAMP;
-        RETURN NEW;
-      END;
-      $$ LANGUAGE plpgsql;
+BEGIN
+  NEW.updated_at = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
       
       DROP TRIGGER IF EXISTS update_code_snippets_updated_at ON code_snippets;
       CREATE TRIGGER update_code_snippets_updated_at
@@ -359,11 +386,11 @@ async function initDatabase() {
     const createHealthRecordsUpdateTrigger = `
       CREATE OR REPLACE FUNCTION update_health_records_updated_at()
       RETURNS TRIGGER AS $$
-      BEGIN
-        NEW.updated_at = CURRENT_TIMESTAMP;
-        RETURN NEW;
-      END;
-      $$ LANGUAGE plpgsql;
+BEGIN
+  NEW.updated_at = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
       
       DROP TRIGGER IF EXISTS update_health_records_updated_at ON health_records;
       CREATE TRIGGER update_health_records_updated_at
@@ -391,11 +418,11 @@ async function initDatabase() {
     const createExerciseRecordsUpdateTrigger = `
       CREATE OR REPLACE FUNCTION update_exercise_records_updated_at()
       RETURNS TRIGGER AS $$
-      BEGIN
-        NEW.updated_at = CURRENT_TIMESTAMP;
-        RETURN NEW;
-      END;
-      $$ LANGUAGE plpgsql;
+BEGIN
+  NEW.updated_at = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
       
       DROP TRIGGER IF EXISTS update_exercise_records_updated_at ON exercise_records;
       CREATE TRIGGER update_exercise_records_updated_at
@@ -423,11 +450,11 @@ async function initDatabase() {
     const createSleepRecordsUpdateTrigger = `
       CREATE OR REPLACE FUNCTION update_sleep_records_updated_at()
       RETURNS TRIGGER AS $$
-      BEGIN
-        NEW.updated_at = CURRENT_TIMESTAMP;
-        RETURN NEW;
-      END;
-      $$ LANGUAGE plpgsql;
+BEGIN
+  NEW.updated_at = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
       
       DROP TRIGGER IF EXISTS update_sleep_records_updated_at ON sleep_records;
       CREATE TRIGGER update_sleep_records_updated_at
@@ -487,11 +514,11 @@ async function initDatabase() {
     const createIncomeRecordsUpdateTrigger = `
       CREATE OR REPLACE FUNCTION update_income_records_updated_at()
       RETURNS TRIGGER AS $$
-      BEGIN
-        NEW.updated_at = CURRENT_TIMESTAMP;
-        RETURN NEW;
-      END;
-      $$ LANGUAGE plpgsql;
+BEGIN
+  NEW.updated_at = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
       
       DROP TRIGGER IF EXISTS update_income_records_updated_at ON income_records;
       CREATE TRIGGER update_income_records_updated_at
@@ -519,11 +546,11 @@ async function initDatabase() {
     const createExpenseRecordsUpdateTrigger = `
       CREATE OR REPLACE FUNCTION update_expense_records_updated_at()
       RETURNS TRIGGER AS $$
-      BEGIN
-        NEW.updated_at = CURRENT_TIMESTAMP;
-        RETURN NEW;
-      END;
-      $$ LANGUAGE plpgsql;
+BEGIN
+  NEW.updated_at = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
       
       DROP TRIGGER IF EXISTS update_expense_records_updated_at ON expense_records;
       CREATE TRIGGER update_expense_records_updated_at
