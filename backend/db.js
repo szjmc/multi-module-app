@@ -31,27 +31,12 @@ async function testConnection() {
     if (process.env.POSTGRES_URL) {
       console.log('使用POSTGRES_URL连接数据库...');
       
-      // 解析连接字符串，创建不含sslmode的版本，以便我们明确控制SSL配置
-      let connectionString = process.env.POSTGRES_URL;
-      // 移除连接字符串中的sslmode参数
-      connectionString = connectionString.replace(/[?&]sslmode=[^&]+/g, '');
-      // 确保连接字符串格式正确
-      if (!connectionString.includes('?')) {
-        connectionString += '?';
-      } else if (!connectionString.endsWith('?')) {
-        connectionString += '&';
-      }
-      // 添加必要的参数，但不包含sslmode
-      connectionString += 'supa=base-pooler.x';
-      
-      console.log('处理后的连接字符串:', connectionString.replace(/:.*@/, ':***@'));
-      
-      // 创建连接池配置，明确控制SSL
+      // 创建连接池配置，使用原始连接字符串，但调整SSL和超时设置
       pool = new Pool({
-        connectionString: connectionString,
+        connectionString: process.env.POSTGRES_URL,
         max: 10,
         idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 5000,
+        connectionTimeoutMillis: 15000, // 增加连接超时时间到15秒
         // 明确设置SSL配置，完全控制SSL行为
         ssl: {
           rejectUnauthorized: false, // 允许自签名证书
@@ -63,12 +48,23 @@ async function testConnection() {
       
       // 测试连接
       console.log('连接池已创建，正在测试连接...');
-      const testClient = await pool.connect();
-      await testClient.query('SELECT NOW()');
-      testClient.release();
+      console.log('连接超时时间:', pool.options.connectionTimeoutMillis, 'ms');
       
-      console.log('数据库连接池创建成功');
-      return pool;
+      try {
+        const testClient = await pool.connect();
+        console.log('连接成功，正在执行测试查询...');
+        const result = await testClient.query('SELECT NOW()');
+        console.log('测试查询结果:', result.rows[0]);
+        testClient.release();
+        
+        console.log('数据库连接池创建成功');
+        return pool;
+      } catch (connectErr) {
+        console.error('连接测试失败:', connectErr.message);
+        console.error('尝试关闭连接池...');
+        await pool.end();
+        throw connectErr;
+      }
     }
     
     // 如果没有POSTGRES_URL，使用传统的连接方式
@@ -93,7 +89,7 @@ async function testConnection() {
       database: dbName,
       max: 10,
       idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 5000,
+      connectionTimeoutMillis: 15000, // 增加连接超时时间到15秒
       // 明确设置SSL配置，处理自签名证书
       ssl: {
         rejectUnauthorized: false, // 允许自签名证书
