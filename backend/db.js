@@ -31,13 +31,34 @@ async function testConnection() {
     if (process.env.POSTGRES_URL) {
       console.log('使用POSTGRES_URL连接数据库...');
       
-      // 创建连接池配置
+      // 解析连接字符串，创建不含sslmode的版本，以便我们明确控制SSL配置
+      let connectionString = process.env.POSTGRES_URL;
+      // 移除连接字符串中的sslmode参数
+      connectionString = connectionString.replace(/[?&]sslmode=[^&]+/g, '');
+      // 确保连接字符串格式正确
+      if (!connectionString.includes('?')) {
+        connectionString += '?';
+      } else if (!connectionString.endsWith('?')) {
+        connectionString += '&';
+      }
+      // 添加必要的参数，但不包含sslmode
+      connectionString += 'supa=base-pooler.x';
+      
+      console.log('处理后的连接字符串:', connectionString.replace(/:.*@/, ':***@'));
+      
+      // 创建连接池配置，明确控制SSL
       pool = new Pool({
-        connectionString: process.env.POSTGRES_URL,
+        connectionString: connectionString,
         max: 10,
         idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 5000
-        // 连接URL中已包含sslmode=require，不需要显式设置SSL
+        connectionTimeoutMillis: 5000,
+        // 明确设置SSL配置，完全控制SSL行为
+        ssl: {
+          rejectUnauthorized: false, // 允许自签名证书
+          require: true, // 强制使用SSL
+          ca: process.env.POSTGRES_CA_CERT || undefined, // 可选的CA证书
+          checkServerIdentity: () => undefined // 完全跳过服务器身份验证
+        }
       });
       
       // 测试连接
@@ -73,7 +94,11 @@ async function testConnection() {
       max: 10,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 5000,
-      ssl: true, // Supabase需要SSL
+      // 明确设置SSL配置，处理自签名证书
+      ssl: {
+        rejectUnauthorized: false, // 允许自签名证书
+        require: true // 但仍然需要SSL连接
+      },
       sslmode: 'require'
     };
     
