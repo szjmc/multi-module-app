@@ -32,43 +32,25 @@ async function testConnection() {
     if (connectionUrl) {
       console.log('使用连接URL连接数据库...');
       
-      // 解析连接URL，提取连接参数
-      const url = new URL(connectionUrl);
-      
-      // 创建直接的连接配置，完全忽略连接URL中的sslmode
-      const poolConfig = {
-        host: url.hostname,
-        port: parseInt(url.port),
-        user: url.username,
-        password: url.password,
-        database: url.pathname.slice(1), // 移除开头的斜杠
-        max: 10,
-        idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 15000, // 增加连接超时时间到15秒
-        // 完全控制SSL配置，禁用证书验证
-        ssl: {
-          rejectUnauthorized: false, // 完全禁用证书验证
-          requestCert: false,
-          agent: false,
-          require: true // 但仍然需要SSL连接
-        }
-      };
-      
-      console.log('连接配置:', {
-        host: poolConfig.host,
-        port: poolConfig.port,
-        user: poolConfig.user,
-        database: poolConfig.database,
-        ssl: poolConfig.ssl
-      });
-      
-      // 创建连接池
-      pool = new Pool(poolConfig);
-      
-      // 测试连接
-      console.log('连接池已创建，正在测试连接...');
-      
+      // 对于Vercel部署，直接使用完整的连接字符串
       try {
+        // 创建连接池，使用完整的连接字符串
+        const poolConfig = {
+          connectionString: connectionUrl,
+          ssl: {
+            rejectUnauthorized: false
+          },
+          max: 10,
+          idleTimeoutMillis: 30000,
+          connectionTimeoutMillis: 20000, // 增加连接超时时间到20秒
+        };
+        
+        console.log('使用连接字符串创建连接池...');
+        pool = new Pool(poolConfig);
+        
+        // 测试连接
+        console.log('连接池已创建，正在测试连接...');
+        
         const testClient = await pool.connect();
         console.log('连接成功，正在执行测试查询...');
         const result = await testClient.query('SELECT NOW()');
@@ -80,7 +62,7 @@ async function testConnection() {
       } catch (connectErr) {
         console.error('连接测试失败:', connectErr.message);
         console.error('尝试关闭连接池...');
-        await pool.end();
+        if (pool) await pool.end();
         throw connectErr;
       }
     }

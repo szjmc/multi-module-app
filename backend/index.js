@@ -12,11 +12,33 @@ const app = express();
 
 // 中间件
 const corsOptions = {
-  origin: ['https://multi-module-7wppp6x1g-sans-projects-97fe81a5.vercel.app', 'https://multi-module-5mcw5agfc-sans-projects-97fe81a5.vercel.app', 'http://localhost:3000', 'http://localhost:5173'],
+  origin: function (origin, callback) {
+    // 允许的域名列表
+    const allowedOrigins = [
+      'https://multi-module-7wppp6x1g-sans-projects-97fe81a5.vercel.app',
+      'https://multi-module-5mcw5agfc-sans-projects-97fe81a5.vercel.app', 
+      'https://multi-module-60zkh5uso-sans-projects-97fe81a5.vercel.app',
+      'https://multi-module-app-frontend-psi.vercel.app',
+      'http://localhost:3000',
+      'http://localhost:5173',
+      'http://localhost:8080'
+    ];
+    
+    // 允许没有origin的请求（如移动应用、Postman等）
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    } else {
+      console.log('Origin not allowed:', origin);
+      return callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  exposedHeaders: ['Access-Control-Allow-Origin']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Access-Control-Allow-Origin'],
+  optionsSuccessStatus: 200
 };
 app.use(cors(corsOptions));
 
@@ -41,14 +63,15 @@ async function initializeDatabase() {
 }
 
 // 根路径路由，返回API状态信息
-app.get('/', async (req, res) => {
+app.get('/', (req, res) => {
   try {
-    await initializeDatabase();
+    // 简单的状态检查，不依赖数据库
     res.json({
       status: 'ok',
       message: 'FlowSync API服务正在运行',
       version: '1.0.0',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'development'
     });
   } catch (error) {
     res.status(500).json({
@@ -57,6 +80,36 @@ app.get('/', async (req, res) => {
       error: error.message
     });
   }
+});
+
+// 健康检查路由（依赖数据库）
+app.get('/health', async (req, res) => {
+  try {
+    await initializeDatabase();
+    res.json({
+      status: 'ok',
+      message: 'FlowSync API服务运行正常，数据库连接成功',
+      version: '1.0.0',
+      timestamp: new Date().toISOString(),
+      database: 'connected'
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      message: '数据库连接失败',
+      error: error.message
+    });
+  }
+});
+
+// 健康检查端点
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development'
+  });
 });
 
 /**
@@ -1460,6 +1513,12 @@ app.delete('/api/expense-records/:id', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
+});
+
+// 启动服务器
+const PORT = process.env.PORT || 3002;
+app.listen(PORT, () => {
+  console.log(`服务器运行在端口 ${PORT}`);
 });
 
 // 导出app实例，用于Vercel部署

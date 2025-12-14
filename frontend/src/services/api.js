@@ -7,12 +7,40 @@ import axios from 'axios';
 
 // 创建axios实例
 const api = axios.create({
-  baseURL: 'https://multi-module-app-backend-jxemb7ued-sans-projects-97fe81a5.vercel.app/api',
-  timeout: 10000,
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'https://multi-module-app-backend-jxemb7ued-sans-projects-97fe81a5.vercel.app/api',
+  timeout: 15000,
   headers: {
     'Content-Type': 'application/json'
   }
 });
+
+// 请求拦截器
+api.interceptors.request.use(
+  (config) => {
+    console.log('API请求:', config.method?.toUpperCase(), config.baseURL + config.url);
+    return config;
+  },
+  (error) => {
+    console.error('请求错误:', error);
+    return Promise.reject(error);
+  }
+);
+
+// 响应拦截器
+api.interceptors.response.use(
+  (response) => {
+    console.log('API响应:', response.status, response.config.url);
+    return response;
+  },
+  (error) => {
+    console.error('响应错误:', error.message, error.config?.url);
+    if (error.response) {
+      console.error('响应状态:', error.response.status);
+      console.error('响应数据:', error.response.data);
+    }
+    return Promise.reject(error);
+  }
+);
 
 /**
  * 任务相关API
