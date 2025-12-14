@@ -27,28 +27,46 @@ async function testConnection() {
     console.log('POSTGRES_USER:', process.env.POSTGRES_USER || '未设置');
     console.log('===================');
     
-    // 优先使用Vercel/Supabase提供的POSTGRES_URL
-    if (process.env.POSTGRES_URL) {
-      console.log('使用POSTGRES_URL连接数据库...');
+    // 优先使用Vercel/Supabase提供的连接URL
+    let connectionUrl = process.env.POSTGRES_URL || process.env.POSTGRES_URL_NON_POOLING;
+    if (connectionUrl) {
+      console.log('使用连接URL连接数据库...');
       
-      // 创建连接池配置，使用原始连接字符串，但调整SSL和超时设置
-      pool = new Pool({
-        connectionString: process.env.POSTGRES_URL,
+      // 解析连接URL，提取连接参数
+      const url = new URL(connectionUrl);
+      
+      // 创建直接的连接配置，完全忽略连接URL中的sslmode
+      const poolConfig = {
+        host: url.hostname,
+        port: parseInt(url.port),
+        user: url.username,
+        password: url.password,
+        database: url.pathname.slice(1), // 移除开头的斜杠
         max: 10,
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 15000, // 增加连接超时时间到15秒
-        // 明确设置SSL配置，完全控制SSL行为
+        // 完全控制SSL配置，禁用证书验证
         ssl: {
-          rejectUnauthorized: false, // 允许自签名证书
-          require: true, // 强制使用SSL
-          ca: process.env.POSTGRES_CA_CERT || undefined, // 可选的CA证书
-          checkServerIdentity: () => undefined // 完全跳过服务器身份验证
+          rejectUnauthorized: false, // 完全禁用证书验证
+          requestCert: false,
+          agent: false,
+          require: true // 但仍然需要SSL连接
         }
+      };
+      
+      console.log('连接配置:', {
+        host: poolConfig.host,
+        port: poolConfig.port,
+        user: poolConfig.user,
+        database: poolConfig.database,
+        ssl: poolConfig.ssl
       });
+      
+      // 创建连接池
+      pool = new Pool(poolConfig);
       
       // 测试连接
       console.log('连接池已创建，正在测试连接...');
-      console.log('连接超时时间:', pool.options.connectionTimeoutMillis, 'ms');
       
       try {
         const testClient = await pool.connect();
@@ -67,7 +85,7 @@ async function testConnection() {
       }
     }
     
-    // 如果没有POSTGRES_URL，使用传统的连接方式
+    // 如果没有连接URL，使用传统的连接方式
     console.log('使用传统连接方式...');
     
     // 解析环境变量，使用Supabase的环境变量优先级高于传统环境变量
@@ -90,9 +108,11 @@ async function testConnection() {
       max: 10,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 15000, // 增加连接超时时间到15秒
-      // 明确设置SSL配置，处理自签名证书
+      // 完全控制SSL配置，禁用证书验证
       ssl: {
-        rejectUnauthorized: false, // 允许自签名证书
+        rejectUnauthorized: false, // 完全禁用证书验证
+        requestCert: false,
+        agent: false,
         require: true // 但仍然需要SSL连接
       },
       sslmode: 'require'
