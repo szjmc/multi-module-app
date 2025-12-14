@@ -12,12 +12,16 @@ const app = express();
 
 // 中间件
 const corsOptions = {
-  origin: ['https://multi-module-5mcw5agfc-sans-projects-97fe81a5.vercel.app', 'http://localhost:3000', 'http://localhost:5173'],
+  origin: ['https://multi-module-7wppp6x1g-sans-projects-97fe81a5.vercel.app', 'https://multi-module-5mcw5agfc-sans-projects-97fe81a5.vercel.app', 'http://localhost:3000', 'http://localhost:5173'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  exposedHeaders: ['Access-Control-Allow-Origin']
 };
 app.use(cors(corsOptions));
+
+// 处理OPTIONS请求，确保CORS配置正确
+app.options('*', cors(corsOptions));
 // 增加请求体大小限制，支持更大的笔记内容
 app.use(express.json({ limit: '100mb' }));
 
