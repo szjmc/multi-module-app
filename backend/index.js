@@ -82,8 +82,18 @@ app.get('/', (req, res) => {
   }
 });
 
+// 健康检查端点（简单版本，不依赖数据库）
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
 // 健康检查路由（依赖数据库）
-app.get('/health', async (req, res) => {
+app.get('/health-db', async (req, res) => {
   try {
     await initializeDatabase();
     res.json({
@@ -100,16 +110,6 @@ app.get('/health', async (req, res) => {
       error: error.message
     });
   }
-});
-
-// 健康检查端点
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    environment: process.env.NODE_ENV || 'development'
-  });
 });
 
 /**
