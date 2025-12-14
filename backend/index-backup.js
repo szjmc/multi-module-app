@@ -10,9 +10,38 @@ require('dotenv').config();
 
 const app = express();
 
-// 临时允许所有来源的CORS配置
+// 中间件
 const corsOptions = {
-  origin: '*', // 临时允许所有来源
+  origin: function (origin, callback) {
+    // 允许的域名列表
+    const allowedOrigins = [
+      'https://multi-module-7wppp6x1g-sans-projects-97fe81a5.vercel.app',
+      'https://multi-module-5mcw5agfc-sans-projects-97fe81a5.vercel.app', 
+      'https://multi-module-60zkh5uso-sans-projects-97fe81a5.vercel.app',
+      'https://multi-module-app-frontend-psi.vercel.app',
+      'https://multi-module-pr7hzusfr-sans-projects-97fe81a5.vercel.app',
+      'http://localhost:3000',
+      'http://localhost:5173',
+      'http://localhost:8080'
+    ];
+    
+    // 允许没有origin的请求（如移动应用、Postman等）
+    if (!origin) return callback(null, true);
+    
+    // 检查是否是允许的域名
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    // 允许所有Vercel子域名（临时解决方案）
+    if (origin.includes('vercel.app') && origin.includes('multi-module')) {
+      console.log('Allowing Vercel subdomain:', origin);
+      return callback(null, true);
+    }
+    
+    console.log('Origin not allowed:', origin);
+    return callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],

@@ -11,7 +11,9 @@ const api = axios.create({
   timeout: 15000,
   headers: {
     'Content-Type': 'application/json'
-  }
+  },
+  // 添加CORS相关配置
+  withCredentials: false
 });
 
 // 请求拦截器
